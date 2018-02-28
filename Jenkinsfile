@@ -53,140 +53,140 @@ volumes:[
       }
     }
 
-    def acct = pipeline.getContainerRepoAcct(config)
+    // def acct = pipeline.getContainerRepoAcct(config)
 
-    // tag image with version, and branch-commit_id
-    def image_tags_map = pipeline.getContainerTags(config)
+    // // tag image with version, and branch-commit_id
+    // def image_tags_map = pipeline.getContainerTags(config)
 
-    // compile tag list
-    def image_tags_list = pipeline.getMapValues(image_tags_map)
+    // // compile tag list
+    // def image_tags_list = pipeline.getMapValues(image_tags_map)
 
-    stage ('compile and test') {
+    // stage ('compile and test') {
 
-      container('golang') {
-        sh "go test -v -race ./..."
-        sh "make bootstrap build"
-      }
-    }
+    //   container('golang') {
+    //     sh "go test -v -race ./..."
+    //     sh "make bootstrap build"
+    //   }
+    // }
 
-    stage ('test deployment') {
+    // stage ('test deployment') {
 
-      container('helm') {
+    //   container('helm') {
 
-        // run helm chart linter
-        pipeline.helmLint(chart_dir)
+    //     // run helm chart linter
+    //     pipeline.helmLint(chart_dir)
 
-        // run dry-run helm chart installation
-        pipeline.helmDeploy(
-          dry_run       : true,
-          name          : config.app.name,
-          namespace     : config.app.name,
-          chart_dir     : chart_dir,
-          set           : [
-            "imageTag": image_tags_list.get(0),
-            "replicas": config.app.replicas,
-            "cpu": config.app.cpu,
-            "memory": config.app.memory,
-            "ingress.hostname": config.app.hostname,
-          ]
-        )
+    //     // run dry-run helm chart installation
+    //     pipeline.helmDeploy(
+    //       dry_run       : true,
+    //       name          : config.app.name,
+    //       namespace     : config.app.name,
+    //       chart_dir     : chart_dir,
+    //       set           : [
+    //         "imageTag": image_tags_list.get(0),
+    //         "replicas": config.app.replicas,
+    //         "cpu": config.app.cpu,
+    //         "memory": config.app.memory,
+    //         "ingress.hostname": config.app.hostname,
+    //       ]
+    //     )
 
-      }
-    }
+    //   }
+    // }
 
-    stage ('publish container') {
+    // stage ('publish container') {
 
-      container('docker') {
+    //   container('docker') {
 
-        // perform docker login to container registry as the docker-pipeline-plugin doesn't work with the next auth json format
-        withCredentials([[$class          : 'UsernamePasswordMultiBinding', credentialsId: config.container_repo.jenkins_creds_id,
-                        usernameVariable: 'USERNAME', passwordVariable: 'PASSWORD']]) {
-          sh "docker login -u ${env.USERNAME} -p ${env.PASSWORD} ${config.container_repo.host}"
-        }
+    //     // perform docker login to container registry as the docker-pipeline-plugin doesn't work with the next auth json format
+    //     withCredentials([[$class          : 'UsernamePasswordMultiBinding', credentialsId: config.container_repo.jenkins_creds_id,
+    //                     usernameVariable: 'USERNAME', passwordVariable: 'PASSWORD']]) {
+    //       sh "docker login -u ${env.USERNAME} -p ${env.PASSWORD} ${config.container_repo.host}"
+    //     }
 
-        // build and publish container
-        pipeline.containerBuildPub(
-            dockerfile: config.container_repo.dockerfile,
-            host      : config.container_repo.host,
-            acct      : acct,
-            repo      : config.container_repo.repo,
-            tags      : image_tags_list,
-            auth_id   : config.container_repo.jenkins_creds_id,
-            image_scanning: config.container_repo.image_scanning
-        )
+    //     // build and publish container
+    //     pipeline.containerBuildPub(
+    //         dockerfile: config.container_repo.dockerfile,
+    //         host      : config.container_repo.host,
+    //         acct      : acct,
+    //         repo      : config.container_repo.repo,
+    //         tags      : image_tags_list,
+    //         auth_id   : config.container_repo.jenkins_creds_id,
+    //         image_scanning: config.container_repo.image_scanning
+    //     )
 
-        // anchore image scanning configuration
-        println "Add container image tags to anchore scanning list"
+    //     // anchore image scanning configuration
+    //     println "Add container image tags to anchore scanning list"
         
-        def tag = image_tags_list.get(0)
-        def imageLine = "${config.container_repo.host}/${acct}/${config.container_repo.repo}:${tag}" + ' ' + env.WORKSPACE + '/Dockerfile'
-        writeFile file: 'anchore_images', text: imageLine
-        anchore name: 'anchore_images', inputQueries: [[query: 'list-packages all'], [query: 'list-files all'], [query: 'cve-scan all'], [query: 'show-pkg-diffs base']]
+    //     def tag = image_tags_list.get(0)
+    //     def imageLine = "${config.container_repo.host}/${acct}/${config.container_repo.repo}:${tag}" + ' ' + env.WORKSPACE + '/Dockerfile'
+    //     writeFile file: 'anchore_images', text: imageLine
+    //     anchore name: 'anchore_images', inputQueries: [[query: 'list-packages all'], [query: 'list-files all'], [query: 'cve-scan all'], [query: 'show-pkg-diffs base']]
 
-      }
+    //   }
 
-    }
+    // }
 
-    if (env.BRANCH_NAME =~ "PR-*" ) {
-      stage ('deploy to k8s') {
-        container('helm') {
-          // Deploy using Helm chart
-          pipeline.helmDeploy(
-            dry_run       : false,
-            name          : env.BRANCH_NAME.toLowerCase(),
-            namespace     : env.BRANCH_NAME.toLowerCase(),
-            chart_dir     : chart_dir,
-            set           : [
-              "imageTag": image_tags_list.get(0),
-              "replicas": config.app.replicas,
-              "cpu": config.app.cpu,
-              "memory": config.app.memory,
-              "ingress.hostname": config.app.hostname,
-            ]
-          )
+    // if (env.BRANCH_NAME =~ "PR-*" ) {
+    //   stage ('deploy to k8s') {
+    //     container('helm') {
+    //       // Deploy using Helm chart
+    //       pipeline.helmDeploy(
+    //         dry_run       : false,
+    //         name          : env.BRANCH_NAME.toLowerCase(),
+    //         namespace     : env.BRANCH_NAME.toLowerCase(),
+    //         chart_dir     : chart_dir,
+    //         set           : [
+    //           "imageTag": image_tags_list.get(0),
+    //           "replicas": config.app.replicas,
+    //           "cpu": config.app.cpu,
+    //           "memory": config.app.memory,
+    //           "ingress.hostname": config.app.hostname,
+    //         ]
+    //       )
 
-          //  Run helm tests
-          if (config.app.test) {
-            pipeline.helmTest(
-              name        : env.BRANCH_NAME.toLowerCase()
-            )
-          }
+    //       //  Run helm tests
+    //       if (config.app.test) {
+    //         pipeline.helmTest(
+    //           name        : env.BRANCH_NAME.toLowerCase()
+    //         )
+    //       }
 
-          // delete test deployment
-          pipeline.helmDelete(
-              name       : env.BRANCH_NAME.toLowerCase()
-          )
-        }
-      }
-    }
+    //       // delete test deployment
+    //       pipeline.helmDelete(
+    //           name       : env.BRANCH_NAME.toLowerCase()
+    //       )
+    //     }
+    //   }
+    // }
 
-    // deploy only the master branch
-    if (env.BRANCH_NAME == 'master') {
-      stage ('deploy to k8s') {
-        container('helm') {
-          // Deploy using Helm chart
-          pipeline.helmDeploy(
-            dry_run       : false,
-            name          : config.app.name,
-            namespace     : config.app.name,
-            chart_dir     : chart_dir,
-            set           : [
-              "imageTag": image_tags_list.get(0),
-              "replicas": config.app.replicas,
-              "cpu": config.app.cpu,
-              "memory": config.app.memory,
-              "ingress.hostname": config.app.hostname,
-            ]
-          )
+    // // deploy only the master branch
+    // if (env.BRANCH_NAME == 'master') {
+    //   stage ('deploy to k8s') {
+    //     container('helm') {
+    //       // Deploy using Helm chart
+    //       pipeline.helmDeploy(
+    //         dry_run       : false,
+    //         name          : config.app.name,
+    //         namespace     : config.app.name,
+    //         chart_dir     : chart_dir,
+    //         set           : [
+    //           "imageTag": image_tags_list.get(0),
+    //           "replicas": config.app.replicas,
+    //           "cpu": config.app.cpu,
+    //           "memory": config.app.memory,
+    //           "ingress.hostname": config.app.hostname,
+    //         ]
+    //       )
           
-          //  Run helm tests
-          if (config.app.test) {
-            pipeline.helmTest(
-              name          : config.app.name
-            )
-          }
-        }
-      }
-    }
+    //       //  Run helm tests
+    //       if (config.app.test) {
+    //         pipeline.helmTest(
+    //           name          : config.app.name
+    //         )
+    //       }
+    //     }
+    //   }
+    // }
   }
 }
